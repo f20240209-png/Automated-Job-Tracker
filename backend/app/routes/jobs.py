@@ -8,9 +8,32 @@ from app.schemas.job import JobCreate, JobResponse
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
+# Suburbs roughly within 10km of postcode 3006 (Southbank/CBD)
+NEARBY_SUBURBS = [
+    "melbourne", "southbank", "docklands", "south wharf", "west melbourne",
+    "north melbourne", "kensington", "flemington", "parkville", "carlton",
+    "fitzroy", "collingwood", "abbotsford", "richmond", "cremorne",
+    "south yarra", "toorak", "prahran", "windsor", "st kilda", "balaclava",
+    "elwood", "albert park", "middle park", "port melbourne", "south melbourne",
+    "east melbourne", "brunswick", "northcote", "coburg", "kew", "hawthorn",
+    "malvern", "armadale", "caulfield", "elsternwick", "moonee ponds",
+    "ascot vale", "yarraville", "footscray", "seddon", "kingsville",
+    "spotswood", "carlton north", "fitzroy north",
+]
 
-@router.post("/new", response_model=JobResponse)
+
+def is_relevant(location: str | None) -> bool:
+    if not location:
+        return False
+    location_lower = location.lower()
+    return any(suburb in location_lower for suburb in NEARBY_SUBURBS)
+
+
+@router.post("/new")
 def create_job(payload: JobCreate, db: Session = Depends(get_db)):
+    if not is_relevant(payload.location):
+        return {"status": "skipped", "reason": "outside ~10km of 3006"}
+
     extra_notes = []
     if payload.salary:
         extra_notes.append(f"Salary: {payload.salary}")
@@ -27,7 +50,7 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)):
     db.add(new_job)
     db.commit()
     db.refresh(new_job)
-    return new_job
+    return {"status": "saved", "job": JobResponse.model_validate(new_job)}
 
 
 @router.get("/", response_model=list[JobResponse])
