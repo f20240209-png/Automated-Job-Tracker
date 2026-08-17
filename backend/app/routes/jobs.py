@@ -4,11 +4,18 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.models.job import Job
+from app.models.user import User
 from app.schemas.job import JobCreate, JobResponse
+from app.auth import get_current_user, verify_api_key
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
-# Suburbs roughly within 10km of postcode 3006 (Southbank/CBD)
+RELEVANT_KEYWORDS = [
+    "software", "developer", "engineer", "backend", "frontend",
+    "full stack", "fullstack", "programmer", "data", "devops",
+    "qa", "test", "python", "javascript", "cloud", "api",
+]
+
 NEARBY_SUBURBS = [
     "melbourne", "southbank", "docklands", "south wharf", "west melbourne",
     "north melbourne", "kensington", "flemington", "parkville", "carlton",
@@ -29,7 +36,7 @@ def is_relevant(location: str | None) -> bool:
     return any(suburb in location_lower for suburb in NEARBY_SUBURBS)
 
 
-@router.post("/new")
+@router.post("/new", dependencies=[Depends(verify_api_key)])
 def create_job(payload: JobCreate, db: Session = Depends(get_db)):
     if not is_relevant(payload.location):
         return {"status": "skipped", "reason": "outside ~10km of 3006"}
@@ -54,5 +61,5 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=list[JobResponse])
-def list_jobs(db: Session = Depends(get_db)):
+def list_jobs(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return db.scalars(select(Job)).all()

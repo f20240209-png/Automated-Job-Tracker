@@ -5,6 +5,7 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from fastapi import Header
 
 from app.database import get_db
 from app.models.user import User
@@ -50,3 +51,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
+
+
+MAKE_API_KEY = os.getenv("MAKE_API_KEY")
+
+
+def verify_api_key(x_api_key: str = Header(...)):
+    if x_api_key != MAKE_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
