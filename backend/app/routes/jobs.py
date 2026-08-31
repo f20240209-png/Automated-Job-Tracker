@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from app.scoring import score_job
 
 from app.database import get_db
 from app.models.job import Job
@@ -10,11 +11,6 @@ from app.auth import get_current_user, verify_api_key
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
-RELEVANT_KEYWORDS = [
-    "software", "developer", "engineer", "backend", "frontend",
-    "full stack", "fullstack", "programmer", "data", "devops",
-    "qa", "test", "python", "javascript", "cloud", "api",
-]
 
 NEARBY_SUBURBS = [
     "melbourne", "southbank", "docklands", "south wharf", "west melbourne",
@@ -41,7 +37,9 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)):
     if not is_relevant(payload.location):
         return {"status": "skipped", "reason": "outside ~10km of 3006"}
 
-    extra_notes = []
+    score, reason = score_job(payload.role, payload.company, payload.location or "")
+
+    extra_notes = [reason]
     if payload.salary:
         extra_notes.append(f"Salary: {payload.salary}")
     if payload.job_type:
@@ -52,7 +50,8 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)):
         role=payload.role,
         location=payload.location,
         link=payload.link,
-        ai_reason=" | ".join(extra_notes) if extra_notes else None,
+        ai_score=score,
+        ai_reason=" | ".join(extra_notes),
     )
     db.add(new_job)
     db.commit()
